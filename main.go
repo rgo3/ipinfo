@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,17 +10,17 @@ import (
 	"time"
 )
 
-type IPAPIResponse struct {
-	IP          string `json:"query"`
-	City        string `json:"city"`
-	Country     string `json:"country"`
-	CountryCode string `json:"countryCode"`
-	ISP         string `json:"isp"`
-}
-
 const (
 	url = "http://ip-api.com/json/"
 )
+
+var commands = map[string]bool{
+	"query": true,
+	"city": true,
+	"country": true, 
+	"countryCode": true,
+	"isp": true,
+}
 
 func main() {
 	apiClient := http.Client{
@@ -29,6 +30,7 @@ func main() {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create request!")
+		return
 	}
 
 	res, err := apiClient.Do(req)
@@ -37,40 +39,36 @@ func main() {
 		return
 	}
 
+	defer res.Body.Close()
+
 	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not read json response!")
 		return
 	}
 
-	ipResponse := &IPAPIResponse{}
-	err = json.Unmarshal([]byte(data), ipResponse)
+	var ipResponse map[string]interface{}
+	err = json.Unmarshal([]byte(data), &ipResponse)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not parse json! :(")
 		return
 	}
-
-	res.Body.Close()
 
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stdout, "Usage: ipinfo <cmd>")
 		os.Exit(1)
 	}
 
-	switch os.Args[1] {
-	case "ip":
-		fmt.Fprintln(os.Stdout, ipResponse.IP)
-	case "city":
-		fmt.Fprintln(os.Stdout, ipResponse.City)
-	case "country":
-		fmt.Fprintln(os.Stdout, ipResponse.Country)
-	case "countryCode":
-		fmt.Fprintln(os.Stdout, ipResponse.CountryCode)
-	case "isp":
-		fmt.Fprintln(os.Stdout, ipResponse.ISP)
-	default:
-		fmt.Fprintln(os.Stdout, "Enter existing ipinfo command")
+	cmd := os.Args[1]
+	if strings.Compare(cmd, "ip") == 0 {
+		cmd = "query"
 	}
 
+	if !commands[cmd] {
+		fmt.Fprintf(os.Stderr, "%s is not a valid command\n", cmd)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%s\n", ipResponse[cmd])
 	return
 }
